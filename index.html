@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Clop Garden</title>
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --text: #1e293b;
+            --clop: #10b981;
+            --plop: #f59e0b;
+            --shloop: #0ea5e9;
+            --shadow: rgba(0, 0, 0, 0.08);
+        }
+
+        body {
+            font-family: 'Quicksand', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: var(--bg);
+            color: var(--text);
+            overflow: hidden;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin: 0 0 20px 0;
+            font-weight: 800;
+            letter-spacing: -1.5px;
+        }
+
+        .top-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+            padding: 12px 24px;
+            background: white;
+            border-radius: 100px;
+            box-shadow: 0 15px 35px var(--shadow);
+            z-index: 100;
+        }
+
+        button {
+            font-family: inherit;
+            font-weight: 800;
+            cursor: pointer;
+            border: none;
+            transition: transform 0.1s, opacity 0.4s, filter 0.3s;
+            touch-action: manipulation;
+        }
+
+        .main-btn {
+            padding: 16px 35px;
+            font-size: 1.1rem;
+            border-radius: 50px;
+            color: white;
+        }
+
+        button:active { transform: scale(0.92); }
+
+        #clopBtn { background-color: var(--clop); position: relative; overflow: hidden; }
+        #plopBtn { background-color: var(--plop); }
+
+        #clopBtn::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; width: 0%; height: 5px;
+            background: rgba(255,255,255,0.4);
+        }
+        #clopBtn.turbo-charging::after { width: 100%; transition: width 0.8s linear; }
+
+        .stage {
+            width: 88vw;
+            height: 52vh;
+            background: white;
+            border-radius: 40px;
+            box-shadow: inset 0 10px 40px var(--shadow);
+            position: relative;
+            overflow: hidden;
+            border: 6px solid #f1f5f9;
+        }
+
+        /* SHLOOP: Dynamic Reveal/Hide */
+        #shloopBtn {
+            position: fixed;
+            bottom: 35px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px) scale(0.8);
+            background: rgba(14, 165, 233, 0.1);
+            color: var(--shloop);
+            padding: 12px 45px;
+            border-radius: 100px;
+            font-size: 0.9rem;
+            border: 2px solid var(--shloop);
+            opacity: 0;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+            z-index: 200;
+        }
+
+        #shloopBtn.visible {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateX(-50%) translateY(0) scale(1);
+        }
+
+        /* JELLY BLOCKS */
+        .item {
+            width: 60px;
+            height: 60px;
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 900;
+            border-radius: 18px;
+            box-shadow: 0 10px 20px var(--shadow);
+            pointer-events: none;
+            transition: top 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.2s;
+            transform: scale(0);
+        }
+
+        .spawned { transform: scale(1); }
+
+        .shlooping {
+            transform: scale(0) translateY(-200px) rotate(20deg) !important;
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.4, 0, 1, 1) !important;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <h1>Clop Garden</h1>
+
+    <div class="top-controls">
+        <button id="clopBtn" class="main-btn">CLOP</button>
+        <button id="plopBtn" class="main-btn">PLOP</button>
+    </div>
+
+    <div class="stage" id="stage"></div>
+
+    <button id="shloopBtn">SHLOOP</button>
+
+    <script>
+        const stage = document.getElementById('stage');
+        const shloopBtn = document.getElementById('shloopBtn');
+        let audioCtx;
+
+        const initAudio = () => {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        };
+
+        function playSound(sF, eF, type, dur, vol=0.1) {
+            initAudio();
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.type = type;
+            o.frequency.setValueAtTime(sF, audioCtx.currentTime);
+            o.frequency.exponentialRampToValueAtTime(eF, audioCtx.currentTime + dur);
+            g.gain.setValueAtTime(vol, audioCtx.currentTime);
+            g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + dur);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(); o.stop(audioCtx.currentTime + dur);
+        }
+
+        const clop = () => {
+            // Show SHLOOP button on first clop
+            if (!shloopBtn.classList.contains('visible')) {
+                shloopBtn.classList.add('visible');
+            }
+            
+            const item = document.createElement('div');
+            item.className = 'item';
+            item.innerText = 'CLOP';
+            const hue = Math.floor(Math.random() * 360);
+            item.style.backgroundColor = `hsl(${hue}, 65%, 55%)`;
+            
+            const x = Math.random() * (stage.clientWidth - 75) + 8;
+            const y = Math.random() * (stage.clientHeight * 0.4) + 20;
+            item.style.left = x + 'px';
+            item.style.top = y + 'px';
+            
+            stage.appendChild(item);
+            playSound(440, 200, 'sine', 0.08, 0.12); 
+            requestAnimationFrame(() => item.classList.add('spawned'));
+        };
+
+        // Turbo System
+        let tTimer, tInterval, isDown = false;
+        const start = (e) => {
+            if(e.type === 'touchstart') e.preventDefault();
+            isDown = true;
+            document.getElementById('clopBtn').classList.add('turbo-charging');
+            tTimer = setTimeout(() => {
+                if(!isDown) return;
+                document.getElementById('clopBtn').classList.add('active');
+                tInterval = setInterval(clop, 85);
+            }, 800);
+        };
+        const end = () => {
+            clearTimeout(tTimer); clearInterval(tInterval);
+            if(isDown && !document.getElementById('clopBtn').classList.contains('active')) clop();
+            isDown = false;
+            document.getElementById('clopBtn').classList.remove('turbo-charging', 'active');
+        };
+
+        const cBtn = document.getElementById('clopBtn');
+        cBtn.addEventListener('mousedown', start);
+        window.addEventListener('mouseup', end);
+        cBtn.addEventListener('touchstart', start, {passive:false});
+        window.addEventListener('touchend', end);
+
+        // Plop
+        document.getElementById('plopBtn').onclick = () => {
+            const items = document.querySelectorAll('.item:not(.plopped)');
+            items.forEach((item, i) => {
+                setTimeout(() => {
+                    item.classList.add('plopped');
+                    item.innerText = 'PLOP';
+                    item.style.top = (stage.clientHeight - 75) + 'px';
+                    playSound(180, 50, 'triangle', 0.25, 0.2);
+                    item.style.transform = 'scaleY(0.7) scaleX(1.2)';
+                    setTimeout(() => item.style.transform = 'scale(1)', 150);
+                }, i * 60);
+            });
+        };
+
+        // Shloop (Hide and Clean)
+        shloopBtn.onclick = () => {
+            const items = document.querySelectorAll('.item');
+            if(items.length > 0) {
+                playSound(300, 1600, 'sine', 0.3, 0.15); 
+                
+                // HIDE the button immediately
+                shloopBtn.classList.remove('visible');
+
+                items.forEach(item => {
+                    item.classList.add('shlooping');
+                    setTimeout(() => item.remove(), 400);
+                });
+            }
+        };
+    </script>
+</body>
+</html>
